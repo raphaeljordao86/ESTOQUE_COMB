@@ -1,0 +1,18 @@
+SELECT DISTINCT ON (c.tank_id, c.post_id) 
+    c.tank_id,
+ produto,
+ alm_emsys,
+    c.value,
+    p.emsys,
+    p.name,
+    c.time
+FROM collect AS c
+JOIN collect_type AS ct 
+    ON c.collect_type_id = ct.id
+JOIN post AS p 
+    ON c.post_id = p.id
+JOIN tank AS t 
+    on CAST(c.tank_id AS integer) = t.tank_id
+    AND p.emsys = t.post_id
+WHERE ct.id = 4
+ORDER BY c.post_id, c.tank_id, c.time DESC;
