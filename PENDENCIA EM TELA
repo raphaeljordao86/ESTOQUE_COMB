@@ -1,0 +1,54 @@
+SELECT 
+  b.nome AS bico,
+  e.codigo as empresa,
+  p.codigo AS produto,
+  a.quantidade,
+  a.valor,
+  a.hora AS hora_abastecimento,
+  a.hora AS hora,
+  'ABASTECIMENTO NA TELA' AS local
+FROM abastecimento a
+JOIN bico b ON (a.bico = b.nome)
+JOIN deposito d ON (b.deposito = d.grid)
+JOIN produto p ON (d.produto = p.grid)
+join empresa AS E ON d.empresa=e.grid
+
+UNION
+
+SELECT 
+  b.nome AS bico,
+  e.codigo as empresa,
+  p.codigo AS produto,
+  a.quantidade,
+  a.valor,
+  a.hora_abastec AS hora_abastecimento,
+  a.ts as hora,
+  'VENDA INICIADA' AS local
+FROM lancto_caixa a
+JOIN bico b ON (a.bico = b.nome)
+JOIN deposito d ON (b.deposito = d.grid)
+join empresa AS E ON d.empresa=e.grid
+JOIN produto p ON (d.produto = p.grid)
+JOIN grupo_produto gp ON (p.grupo = gp.grid)
+WHERE gp.codigo = '1'
+
+UNION
+
+
+
+SELECT 
+  l.bico AS bico,
+  e.codigo as empresa,
+  p.codigo AS produto,
+  l.quantidade,
+  l.valor AS valor,   
+  l.hora_abastec AS hora_abastecimento,
+  l.hora as hora,
+  'DIAS DIFERENTES' AS local
+FROM lancto AS l 
+JOIN produto AS P ON l.produto = p.grid
+join empresa AS E ON l.empresa=e.grid
+WHERE (
+  EXTRACT(DAY FROM l.hora) <> EXTRACT(DAY FROM l.hora_abastec)
+  OR EXTRACT(MONTH FROM l.hora) <> EXTRACT(MONTH FROM l.hora_abastec)
+  OR EXTRACT(YEAR FROM l.hora) <> EXTRACT(YEAR FROM l.hora_abastec));
