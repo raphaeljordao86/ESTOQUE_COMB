@@ -1,0 +1,18 @@
+    select 
+    rv.cod_item,
+    sum(rv.qtd_item) as qtd_venda,
+    (select 
+         COALESCE(sum(me.qtd_movimento_estoque),0)
+     from tab_movimento_estoque me
+     where me.dta_movimento = current_date
+       and me.cod_tipo_movimento = 10
+       and me.cod_empresa = 6
+       and me.cod_item = rv.cod_item
+    ) as qtd_entrada
+from tab_resumo_venda_item rv
+join tab_fechamento_caixa_pdv fc on fc.seq_fechamento = rv.seq_fechamento
+join tab_pdv pd on pd.cod_pdv = fc.cod_pdv
+where fc.dta_fechamento = current_date
+  and exists (select 1 from tab_almoxarifado al where al.cod_item_tanque = rv.cod_item)
+  and pd.cod_empresa = 6
+group by rv.cod_item;
