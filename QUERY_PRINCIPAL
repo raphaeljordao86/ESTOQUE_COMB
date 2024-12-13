@@ -10,11 +10,12 @@ SELECT
             FROM tab_movimento_estoque me
             WHERE me.dta_movimento = CURRENT_DATE
               AND me.cod_tipo_movimento = 10
-              AND me.cod_empresa IN (19, 23, 29)
+              AND me.cod_empresa IN (19, 23, 29,52)
               AND me.cod_item = rv.cod_item
         ), 0) AS NUMERIC), 2
     ) AS qtd_entrada,
      ROUND(CAST(COALESCE(descarga.qtd_descarga, 0) AS NUMERIC), 2) AS qtd_descarga,
+     ROUND(CAST(COALESCE(descarga.qtd_descarga, 0) AS NUMERIC), 2) AS qtd_descarga2,
     ROUND(CAST(COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2) AS qtd_venda,
     ROUND(CAST(
         COALESCE(opening_data.qtd_abertura, 0) + 
@@ -24,7 +25,7 @@ SELECT
             FROM tab_movimento_estoque me
             WHERE me.dta_movimento = CURRENT_DATE
               AND me.cod_tipo_movimento = 10
-              AND me.cod_empresa IN (19, 23, 29)
+              AND me.cod_empresa IN (19, 23, 29,52)
               AND me.cod_item = rv.cod_item
         ), 0) - COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2
     ) AS saldo_escritural,
@@ -56,32 +57,13 @@ JOIN tab_pdv pd ON pd.cod_pdv = fc.cod_pdv
 LEFT JOIN (
     SELECT * FROM dblink(
         'host=192.168.23.198 dbname=fuel_tank_db user=tank_admin password=UvBJOjRYf_Ev5Wg7N0-d4MX_ou6NeADj', 
-        'SELECT cod_item, cod_empresa, SUM(qtd_descarga) AS qtd_descarga
-         FROM (
-             SELECT DISTINCT ON (c.tank_id, c.post_id) c.amount AS qtd_descarga, p.emsys AS cod_empresa, produto AS cod_item
-             FROM delivery AS c
-             JOIN post AS p ON c.post_id = p.id
-             JOIN tank AS t ON CAST(c.tank_id AS INTEGER) = t.tank_id
-                 AND p.emsys = t.post_id
-             WHERE c.end_time > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
-             ORDER BY c.post_id, c.tank_id, c.end_time DESC
-         ) AS descarga
-         GROUP BY cod_item, cod_empresa')
-    AS dblink_result2(cod_item INTEGER, cod_empresa INTEGER, qtd_descarga NUMERIC)
-) descarga ON descarga.cod_empresa = pd.cod_empresa AND descarga.cod_item = rv.cod_item
-LEFT JOIN (
-    SELECT * FROM dblink(
-        'host=192.168.23.198 dbname=fuel_tank_db user=tank_admin password=UvBJOjRYf_Ev5Wg7N0-d4MX_ou6NeADj', 
         'SELECT emsys AS cod_empresa, produto AS cod_item, SUM(value) AS qtd
          FROM (
              SELECT DISTINCT ON (c.tank_id, c.post_id) 
                  c.tank_id,
                  produto,
-                 alm_emsys,
                  c.value,
-                 p.emsys,
-                 p.name,
-                 c.time
+                 p.emsys
              FROM collect AS c
              JOIN collect_type AS ct ON c.collect_type_id = ct.id
              JOIN post AS p ON c.post_id = p.id
@@ -93,6 +75,7 @@ LEFT JOIN (
          GROUP BY emsys, produto')
     AS dblink_result(cod_empresa INTEGER, cod_item INTEGER, qtd NUMERIC)
 ) remote_data ON remote_data.cod_empresa = pd.cod_empresa AND remote_data.cod_item = rv.cod_item
+
 LEFT JOIN (
     SELECT * FROM dblink(
         'host=192.168.23.198 dbname=fuel_tank_db user=tank_admin password=UvBJOjRYf_Ev5Wg7N0-d4MX_ou6NeADj', 
@@ -114,49 +97,204 @@ LEFT JOIN (
          GROUP BY emsys, produto')
     AS dblink_result(cod_empresa INTEGER, cod_item INTEGER, qtd_abertura NUMERIC)
 ) opening_data ON opening_data.cod_empresa = pd.cod_empresa AND opening_data.cod_item = rv.cod_item
+
+
 LEFT JOIN (
     SELECT * FROM dblink(
-        'host=192.168.14.190 dbname=elft user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx', 
-        'SELECT produto AS cod_item, empresa AS cod_empresa, SUM(valor) AS qtd_pend_desc
+        'host=192.168.23.198 dbname=fuel_tank_db user=tank_admin password=UvBJOjRYf_Ev5Wg7N0-d4MX_ou6NeADj', 
+        'SELECT cod_item, cod_empresa, SUM(qtd_descarga) AS qtd_descarga
          FROM (
-             SELECT 
-                 b.nome AS bico,
-                 e.codigo AS empresa,
-                 p.codigo AS produto,
-                 a.quantidade,
-                 a.valor,
-                 a.hora AS hora_abastecimento,
-                 a.hora AS hora,
-                 ''ABASTECIMENTO NA TELA'' AS local
-             FROM abastecimento a
-             JOIN bico_bomba bb ON (a.bico = bb.bomba)
-			 JOIN bico as b on bb.bico=b.nome
- 			 JOIN deposito d ON (b.deposito = d.grid)
-             JOIN produto p ON (d.produto = p.grid)
-             JOIN empresa AS e ON d.empresa = e.grid
-             UNION
-             SELECT 
-                 b.nome AS bico,
-                 e.codigo AS empresa,
-                 p.codigo AS produto,
-                 a.quantidade,
-                 a.valor,
-                 a.hora_abastec AS hora_abastecimento,
-                 a.ts AS hora,
-                 ''VENDA INICIADA'' AS local
-             FROM lancto_caixa a
-             JOIN bico_bomba bb ON (a.bico = bb.bomba)
-			 JOIN bico as b on bb.bico=b.nome
- 			 JOIN deposito d ON (b.deposito = d.grid)
-             JOIN empresa AS e ON d.empresa = e.grid
-             JOIN produto p ON (d.produto = p.grid)
-             JOIN grupo_produto gp ON (p.grupo = gp.grid)
-             WHERE gp.codigo = ''1''
-         ) AS tabela
-         WHERE hora > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
-         GROUP BY produto, empresa')
-    AS dblink_result(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC)
+             SELECT DISTINCT ON (c.tank_id, c.post_id) c.amount AS qtd_descarga, p.emsys AS cod_empresa, produto AS cod_item
+             FROM delivery AS c
+             JOIN post AS p ON c.post_id = p.id
+             JOIN tank AS t ON CAST(c.tank_id AS INTEGER) = t.tank_id
+                 AND p.emsys = t.post_id
+             WHERE c.end_time > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
+             ORDER BY c.post_id, c.tank_id, c.end_time DESC
+         ) AS descarga
+         GROUP BY cod_item, cod_empresa')
+    AS dblink_result2(cod_item INTEGER, cod_empresa INTEGER, qtd_descarga NUMERIC)
+) descarga ON descarga.cod_empresa = pd.cod_empresa AND descarga.cod_item = rv.cod_item
+
+LEFT JOIN (
+    SELECT * FROM (
+        SELECT * FROM dblink(
+            'host=192.168.14.190 dbname=elft user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx', 
+            'SELECT produto AS cod_item, empresa AS cod_empresa, SUM(quantidade) AS qtd_pend_desc
+             FROM (
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora AS hora_abastecimento,
+                     a.hora AS hora,
+                     ''ABASTECIMENTO NA TELA'' AS local
+                 FROM abastecimento a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 UNION
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora_abastec AS hora_abastecimento,
+                     a.ts AS hora,
+                     ''VENDA INICIADA'' AS local
+                 FROM lancto_caixa a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN grupo_produto gp ON (p.grupo = gp.grid)
+                 WHERE gp.codigo = ''1''
+             ) AS tabela
+             WHERE hora > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
+             GROUP BY produto, empresa')
+        AS dblink_result(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC)
+
+        UNION ALL
+
+        SELECT * FROM dblink(
+            'host=192.168.11.190 dbname=blsm user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+           'SELECT produto AS cod_item, empresa AS cod_empresa, SUM(quantidade) AS qtd_pend_desc
+             FROM (
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora AS hora_abastecimento,
+                     a.hora AS hora,
+                     ''ABASTECIMENTO NA TELA'' AS local
+                 FROM abastecimento a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 UNION
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora_abastec AS hora_abastecimento,
+                     a.ts AS hora,
+                     ''VENDA INICIADA'' AS local
+                 FROM lancto_caixa a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN grupo_produto gp ON (p.grupo = gp.grid)
+                 WHERE gp.codigo = ''1''
+             ) AS tabela
+             WHERE hora > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
+             GROUP BY produto, empresa'
+        ) AS blsm_data(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC)
+
+        UNION ALL
+
+        SELECT * FROM dblink(
+            'host=192.168.17.190 dbname=atrm user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+           'SELECT produto AS cod_item, empresa AS cod_empresa, SUM(quantidade) AS qtd_pend_desc
+             FROM (
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora AS hora_abastecimento,
+                     a.hora AS hora,
+                     ''ABASTECIMENTO NA TELA'' AS local
+                 FROM abastecimento a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 UNION
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora_abastec AS hora_abastecimento,
+                     a.ts AS hora,
+                     ''VENDA INICIADA'' AS local
+                 FROM lancto_caixa a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN grupo_produto gp ON (p.grupo = gp.grid)
+                 WHERE gp.codigo = ''1''
+             ) AS tabela
+             WHERE hora > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
+             GROUP BY produto, empresa'
+        ) AS atrm_data(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC)
+
+        UNION ALL
+
+        SELECT * FROM dblink(
+            'host=192.168.43.190 dbname=gspr user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+           'SELECT produto AS cod_item, empresa AS cod_empresa, SUM(quantidade) AS qtd_pend_desc
+             FROM (
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora AS hora_abastecimento,
+                     a.hora AS hora,
+                     ''ABASTECIMENTO NA TELA'' AS local
+                 FROM abastecimento a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 UNION
+                 SELECT 
+                     b.nome AS bico,
+                     e.codigo AS empresa,
+                     p.codigo AS produto,
+                     a.quantidade,
+                     a.valor,
+                     a.hora_abastec AS hora_abastecimento,
+                     a.ts AS hora,
+                     ''VENDA INICIADA'' AS local
+                 FROM lancto_caixa a
+                 JOIN bico_bomba bb ON (a.bico = bb.bomba)
+                 JOIN bico as b on bb.bico=b.nome
+                 JOIN deposito d ON (b.deposito = d.grid)
+                 JOIN empresa AS e ON d.empresa = e.grid
+                 JOIN produto p ON (d.produto = p.grid)
+                 JOIN grupo_produto gp ON (p.grupo = gp.grid)
+                 WHERE gp.codigo = ''1''
+             ) AS tabela
+             WHERE hora > (CURRENT_DATE - INTERVAL ''1 day'') + INTERVAL ''23 hours 59 minutes 59 seconds''
+             GROUP BY produto, empresa'
+        ) AS gspr_data(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC)
+    ) AS combined_pendencias
 ) pendencias ON pendencias.cod_empresa = pd.cod_empresa AND pendencias.cod_item = rv.cod_item
+
+
 
 
 LEFT JOIN (
@@ -179,7 +317,7 @@ LEFT JOIN (
              AND dn.dest_cnpj = dni.dest_cnpj_xml 
              AND dn.emit_cnpj = dni.emit_cnpj_xml
             WHERE dni.combustivel = 'S' 
-              AND dn.cod_empresa IN ('19', '29', '23', '57')
+              AND dn.cod_empresa IN ('19', '29', '23', '52')
               AND dn.aba IN ('REC') 
             GROUP BY dn.cod_empresa, dni.cprod
             $$
@@ -196,7 +334,7 @@ WHERE fc.dta_fechamento = CURRENT_DATE
       FROM tab_almoxarifado al 
       WHERE al.cod_item_tanque = rv.cod_item
   )
-  AND pd.cod_empresa IN (19, 23, 29)
+  AND pd.cod_empresa IN (19, 23, 29,52)
   AND rv.cod_item <> 13111
 GROUP BY rv.cod_item, pd.cod_empresa, remote_data.qtd, opening_data.qtd_abertura, pendencias.qtd_pend_desc, descarga.qtd_descarga, soma_convertido.qtd_convertido_soma
 ORDER BY pd.cod_empresa;
