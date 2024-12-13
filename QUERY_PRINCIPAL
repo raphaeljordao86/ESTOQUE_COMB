@@ -2,6 +2,7 @@
 SELECT 
     pd.cod_empresa,
     rv.cod_item,
+    i.des_item,
     ROUND(CAST(COALESCE(opening_data.qtd_abertura, 0) AS NUMERIC), 2) AS qtd_abertura,
     ROUND(CAST(
         COALESCE((
@@ -15,7 +16,6 @@ SELECT
         ), 0) AS NUMERIC), 2
     ) AS qtd_entrada,
      ROUND(CAST(COALESCE(descarga.qtd_descarga, 0) AS NUMERIC), 2) AS qtd_descarga,
-     ROUND(CAST(COALESCE(descarga.qtd_descarga, 0) AS NUMERIC), 2) AS qtd_descarga2,
     ROUND(CAST(COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2) AS qtd_venda,
     ROUND(CAST(
         COALESCE(opening_data.qtd_abertura, 0) + 
@@ -53,6 +53,7 @@ SELECT
 FROM tab_resumo_venda_item rv
 JOIN tab_fechamento_caixa_pdv fc ON fc.seq_fechamento = rv.seq_fechamento
 JOIN tab_pdv pd ON pd.cod_pdv = fc.cod_pdv
+JOIN tab_item i ON i.cod_item = rv.cod_item
 
 LEFT JOIN (
     SELECT * FROM dblink(
@@ -336,6 +337,6 @@ WHERE fc.dta_fechamento = CURRENT_DATE
   )
   AND pd.cod_empresa IN (19, 23, 29,52)
   AND rv.cod_item <> 13111
-GROUP BY rv.cod_item, pd.cod_empresa, remote_data.qtd, opening_data.qtd_abertura, pendencias.qtd_pend_desc, descarga.qtd_descarga, soma_convertido.qtd_convertido_soma
+GROUP BY rv.cod_item, pd.cod_empresa, remote_data.qtd, opening_data.qtd_abertura, pendencias.qtd_pend_desc, descarga.qtd_descarga, soma_convertido.qtd_convertido_soma, i.des_item
 ORDER BY pd.cod_empresa;
 
