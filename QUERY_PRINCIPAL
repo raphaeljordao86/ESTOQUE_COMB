@@ -4,46 +4,39 @@ SELECT
     rv.cod_item,
     i.des_item,
     ROUND(CAST(COALESCE(opening_data.qtd_abertura, 0) AS NUMERIC), 2) AS qtd_abertura,
-    ROUND(CAST(
-        COALESCE((
-            SELECT 
-                SUM(me.qtd_movimento_estoque)
-            FROM tab_movimento_estoque me
-            WHERE me.dta_movimento = CURRENT_DATE
-              AND me.cod_tipo_movimento = 10
-              AND me.cod_empresa IN (19, 23, 29,52)
-              AND me.cod_item = rv.cod_item
-        ), 0) AS NUMERIC), 2
-    ) AS qtd_entrada,
+
+     (SELECT COALESCE(SUM(ME.qtd_movimento_estoque),0)
+ FROM 
+tab_movimento_estoque me 
+WHERE me.cod_item = rv.cod_item 
+AND me.cod_empresa = pd.cod_empresa
+AND me.dta_movimento = CURRENT_DATE 
+AND me.cod_tipo_movimento = 10) AS entrada,
      ROUND(CAST(COALESCE(descarga.qtd_descarga, 0) AS NUMERIC), 2) AS qtd_descarga,
     ROUND(CAST(COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2) AS qtd_venda,
+    
     ROUND(CAST(
         COALESCE(opening_data.qtd_abertura, 0) + 
-        COALESCE((
-            SELECT 
-                COALESCE(SUM(me.qtd_movimento_estoque), 0)
-            FROM tab_movimento_estoque me
-            WHERE me.dta_movimento = CURRENT_DATE
-              AND me.cod_tipo_movimento = 10
-              AND me.cod_empresa IN (19, 23, 29,52)
-              AND me.cod_item = rv.cod_item
-        ), 0) - COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2
-    ) AS saldo_escritural,
+       (SELECT COALESCE(SUM(ME.qtd_movimento_estoque),0)
+ FROM 
+tab_movimento_estoque me 
+WHERE me.cod_item = rv.cod_item 
+AND me.cod_empresa = pd.cod_empresa
+AND me.dta_movimento = CURRENT_DATE 
+AND me.cod_tipo_movimento = 10) - COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2 ) AS saldo_escritural,
     
     ROUND(CAST(COALESCE(remote_data.qtd, 0) AS NUMERIC), 2) AS qtd_medidor_tanque,
     
     ROUND(CAST(COALESCE(remote_data.qtd, 0) AS NUMERIC), 2) -
     ROUND(CAST(
         COALESCE(opening_data.qtd_abertura, 0) + 
-        COALESCE((
-            SELECT 
-                COALESCE(SUM(me.qtd_movimento_estoque), 0)
-            FROM tab_movimento_estoque me
-            WHERE me.dta_movimento = CURRENT_DATE
-              AND me.cod_tipo_movimento = 10
-              AND me.cod_empresa IN (19, 23, 29)
-              AND me.cod_item = rv.cod_item
-        ), 0) - COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2
+       (SELECT COALESCE(SUM(ME.qtd_movimento_estoque),0)
+ FROM 
+tab_movimento_estoque me 
+WHERE me.cod_item = rv.cod_item 
+AND me.cod_empresa = pd.cod_empresa
+AND me.dta_movimento = CURRENT_DATE 
+AND me.cod_tipo_movimento = 10) - COALESCE(SUM(rv.qtd_item), 0) AS NUMERIC), 2
     ) AS divergencia,
     
     ROUND(CAST(COALESCE(pendencias.qtd_pend_desc, 0) AS NUMERIC), 2) AS pendencias_tela,
@@ -54,6 +47,7 @@ FROM tab_resumo_venda_item rv
 JOIN tab_fechamento_caixa_pdv fc ON fc.seq_fechamento = rv.seq_fechamento
 JOIN tab_pdv pd ON pd.cod_pdv = fc.cod_pdv
 JOIN tab_item i ON i.cod_item = rv.cod_item
+
 
 LEFT JOIN (
     SELECT * FROM dblink(
@@ -105,7 +99,7 @@ LEFT JOIN (
         'host=192.168.23.198 dbname=fuel_tank_db user=tank_admin password=UvBJOjRYf_Ev5Wg7N0-d4MX_ou6NeADj', 
         'SELECT cod_item, cod_empresa, SUM(qtd_descarga) AS qtd_descarga
          FROM (
-             SELECT DISTINCT ON (c.tank_id, c.post_id) c.amount AS qtd_descarga, p.emsys AS cod_empresa, produto AS cod_item
+             SELECT c.amount AS qtd_descarga, p.emsys AS cod_empresa, produto AS cod_item
              FROM delivery AS c
              JOIN post AS p ON c.post_id = p.id
              JOIN tank AS t ON CAST(c.tank_id AS INTEGER) = t.tank_id
@@ -119,7 +113,7 @@ LEFT JOIN (
 
 LEFT JOIN (
     SELECT * FROM (
-        SELECT * FROM dblink(
+       SELECT * FROM dblink(
             'host=192.168.14.190 dbname=elft user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx', 
             'SELECT produto AS cod_item, empresa AS cod_empresa, SUM(quantidade) AS qtd_pend_desc
              FROM (
