@@ -1,0 +1,78 @@
+
+
+
+CREATE OR REPLACE FUNCTION mc_lmc_automatico(
+    cod_empresa_param INTEGER,
+    cod_item_tanque_param INTEGER,
+    dta_movimento_param DATE
+) RETURNS VOID AS $$
+DECLARE
+    ultimo_seq_lmc_param INTEGER;
+    ultima_data_movimento DATE;
+    capacidade_maxima NUMERIC;
+    num_pagina_inserida INTEGER;
+    existe_registro BOOLEAN;
+BEGIN
+    -- **Passo 1: Inserir em tab_medicao_tanque ANTES de qualquer verificação**
+    BEGIN
+        INSERT INTO tab_medicao_tanque (cod_almoxarifado, dta_medicao, qtd_medida)
+        VALUES (
+            (SELECT cod_almoxarifado
+             FROM tab_almoxarifado
+             WHERE cod_empresa = cod_empresa_param
+             AND cod_item_tanque = cod_item_tanque_param),
+            dta_movimento_param,
+            0
+        )
+        ON CONFLICT DO NOTHING;
+    EXCEPTION
+        WHEN OTHERS THEN
+            RAISE NOTICE 'Aviso: Erro ao inserir em tab_medicao_tanque: %', SQLERRM;
+    END;
+
+    -- **Passo 2: Continuar com as verificações após a inserção da medição**
+
+    -- Verificar a capacidade máxima do tanque
+    SELECT (qtd_capacidade_tanque + qtd_lastro_tanque)
+    INTO capacidade_maxima
+    FROM tab_almoxarifado
+    WHERE cod_item_tanque = cod_item_tanque_param
+      AND cod_empresa = cod_empresa_param;
+
+    -- Verificar a última data de movimento registrada
+    SELECT MAX(dta_movimento)
+    INTO ultima_data_movimento
+    FROM tab_pagina_lmc
+    WHERE seq_lmc = (
+        SELECT MAX(seq_lmc)
+        FROM tab_lmc
+        WHERE cod_empresa = cod_empresa_param
+          AND cod_item = cod_item_tanque_param
+    );
+
+    -- Verificação de sequência de datas
+    IF ultima_data_movimento IS NOT NULL AND dta_movimento_param <> ultima_data_movimento + INTERVAL '1 day' THEN
+        RAISE NOTICE 'Aviso: Data fora da sequência. Última data registrada: %, Data atual: %', ultima_data_movimento, dta_movimento_param;
+        RETURN;
+    END IF;
+
+    -- **Restante da lógica de inclusão do LMC** permanece inalterada
+    SELECT MAX(seq_lmc) INTO ultimo_seq_lmc_param
+    FROM tab_lmc
+    WHERE cod_empresa = cod_empresa_param
+      AND cod_item = cod_item_tanque_param;
+
+    -- Inserir os valores em tab_pagina_lmc
+    INSERT INTO tab_pagina_lmc (seq_lmc, dta_movimento, num_pagina, val_venda)
+    VALUES (
+        ultimo_seq_lmc_param,
+        dta_movimento_param,
+        (SELECT COALESCE(MAX(num_pagina), 0) + 1 FROM tab_pagina_lmc WHERE seq_lmc = ultimo_seq_lmc_param),
+        0
+    )
+    ON CONFLICT DO NOTHING;
+
+    RAISE NOTICE 'Inclusão de LMC concluída com sucesso para empresa % e data %', cod_empresa_param, dta_movimento_param;
+
+END;
+$$ LANGUAGE plpgsql;
