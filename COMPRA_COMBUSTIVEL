@@ -1,0 +1,134 @@
+WITH RESULTADO AS (
+    SELECT 
+        b.cod_item,
+        b.des_item,
+        d.sgl_unidade,
+        e.dta_fechamento,
+        g.cod_empresa,
+        g.nom_fantasia,
+        EXTRACT(DOW FROM e.dta_fechamento)::INTEGER AS semana,
+        COALESCE(mt.qtd_medicao, 0) AS qtd_abertura,
+        1000 AS qtd_lastro_tanque,
+        SUM(ic.qtd_item)::NUMERIC(10,2) AS qtd,
+        (
+            SELECT SUM(aa.qtd_item)::NUMERIC(10,2)
+            FROM tab_resumo_venda_item aa
+            WHERE aa.seq_fechamento IN (
+                SELECT x.seq_fechamento
+                FROM tab_fechamento_caixa_pdv x
+                JOIN tab_pdv pp ON pp.cod_pdv = x.cod_pdv
+                WHERE x.dta_fechamento = CURRENT_DATE
+                AND pp.cod_empresa = g.cod_empresa
+            ) AND aa.cod_item = b.cod_item
+        ) AS qtd_venda_hoje
+    FROM 
+        tab_cupom_fiscal a
+        JOIN tab_item_cupom_fiscal ic ON ic.seq_cupom = a.seq_cupom
+        JOIN tab_item b ON b.cod_item = ic.cod_item
+        JOIN tab_subgrupo_item c ON c.cod_subgrupo_item = b.cod_subgrupo_item
+        JOIN tab_grupo_item h ON h.cod_grupo_item = c.cod_grupo_item
+        JOIN tab_unidade d ON d.cod_unidade = b.cod_unidade
+        JOIN tab_fechamento_caixa_pdv e ON e.seq_fechamento = a.seq_fechamento
+        JOIN tab_pdv pd ON pd.cod_pdv = e.cod_pdv
+        JOIN tab_empresa g ON g.cod_empresa = pd.cod_empresa
+        JOIN tab_almoxarifado al ON al.cod_item_tanque = b.cod_item AND al.cod_empresa = g.cod_empresa
+        JOIN tab_medicao_tanque mt ON mt.cod_almoxarifado = al.cod_almoxarifado AND mt.dta_medicao = CURRENT_DATE - INTERVAL '1 day'
+    WHERE h.cod_grupo_item = 1
+        AND g.cod_empresa IN (19,23,29)
+        AND e.dta_fechamento >= CURRENT_DATE - INTERVAL '14 days'
+        AND e.dta_fechamento < CURRENT_DATE
+        AND a.ind_cancelado = 'N'
+        AND ic.ind_cancelado = 'N'
+    GROUP BY  
+        al.qtd_lastro_tanque,           
+        b.cod_item,
+        b.des_item,
+        d.sgl_unidade,
+        e.dta_fechamento,
+        g.cod_empresa,
+        g.nom_fantasia,
+        mt.qtd_medicao
+),
+HORAS_VENDA AS (
+    SELECT
+        EXTRACT(HOUR FROM a.hra_inicio::TIME) AS hora,
+        b.cod_item,
+        AVG(ic.qtd_item)::NUMERIC(10,2) AS qtd_media_hora
+    FROM 
+        tab_cupom_fiscal a
+        JOIN tab_item_cupom_fiscal ic ON ic.seq_cupom = a.seq_cupom
+        JOIN tab_item b ON b.cod_item = ic.cod_item
+        JOIN tab_fechamento_caixa_pdv e ON e.seq_fechamento = a.seq_cupom
+    WHERE 
+        a.ind_cancelado = 'N' 
+        AND ic.ind_cancelado = 'N'
+        AND e.dta_fechamento >= CURRENT_DATE - INTERVAL '14 days'
+        AND e.dta_fechamento < CURRENT_DATE
+        AND EXTRACT(DOW FROM e.dta_fechamento) = EXTRACT(DOW FROM CURRENT_DATE)
+    GROUP BY 
+        EXTRACT(HOUR FROM a.hra_inicio::TIME), b.cod_item
+),
+DEMANDA AS (
+    SELECT 
+        RR.cod_empresa,
+        RR.nom_fantasia,
+        RR.cod_item,
+        RR.des_item,
+        RR.sgl_unidade,
+        RR.qtd_abertura,
+        RR.qtd_venda_hoje,
+        AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER)::NUMERIC(10,2) AS qtd_media_hoje,
+        AVG(RR.qtd) FILTER (WHERE RR.semana = MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 1, 7))::NUMERIC(10,2) AS qtd_media_amanha,
+        AVG(RR.qtd) FILTER (WHERE RR.semana = MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 2, 7))::NUMERIC(10,2) AS qtd_media_2_dias,
+        AVG(RR.qtd) FILTER (WHERE RR.semana = MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 3, 7))::NUMERIC(10,2) AS qtd_media_3_dias,
+        RR.qtd_lastro_tanque,
+        (RR.qtd_abertura - AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER) - RR.qtd_lastro_tanque)::NUMERIC(10,2) AS qtd_fechamento,
+        GREATEST(CEIL((AVG(RR.qtd) FILTER (WHERE RR.semana = MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 1, 7)) 
+            + AVG(RR.qtd) FILTER (WHERE RR.semana = MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 2, 7)) 
+            + AVG(RR.qtd) FILTER (WHERE RR.semana = MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 3, 7))) 
+            - (RR.qtd_abertura - AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER) - RR.qtd_lastro_tanque)), 0)::NUMERIC(10,2) AS previsao_compra,
+        CASE WHEN (AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER)) > 0 
+            THEN
+                FLOOR((RR.qtd_abertura::NUMERIC - AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER) - RR.qtd_lastro_tanque::NUMERIC) 
+                / AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER))::INTEGER || ' dia(s) e ' || 
+                FLOOR(((RR.qtd_abertura::NUMERIC - AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER) - RR.qtd_lastro_tanque::NUMERIC) 
+                / AVG(RR.qtd) FILTER (WHERE RR.semana = EXTRACT(DOW FROM CURRENT_DATE)::INTEGER)) * 24 % 24)::INTEGER || ' hora(s)'
+            ELSE '0 dia(s) e 0 hora(s)' 
+        END AS dias_atendimento,
+        (
+            SELECT COALESCE(SUM(hv.qtd_media_hora), 0)
+            FROM HORAS_VENDA hv
+            WHERE hv.hora > EXTRACT(HOUR FROM CURRENT_TIME)
+            AND hv.cod_item = RR.cod_item
+        ) AS qtd_prevista_restante,
+        RR.qtd_venda_hoje + 
+        (
+            SELECT COALESCE(SUM(hv.qtd_media_hora), 0)
+            FROM HORAS_VENDA hv
+            WHERE hv.hora > EXTRACT(HOUR FROM CURRENT_TIME)
+            AND hv.cod_item = RR.cod_item
+        ) AS qtd_prevista_total
+    FROM 
+        RESULTADO RR
+    WHERE 
+        RR.semana IN (
+            EXTRACT(DOW FROM CURRENT_DATE)::INTEGER, 
+            MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 1, 7), 
+            MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 2, 7), 
+            MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 3, 7)
+        )
+    GROUP BY 
+        RR.cod_item,
+        RR.des_item,
+        RR.sgl_unidade,
+        RR.qtd_lastro_tanque,
+        RR.qtd_abertura,
+        RR.cod_empresa,
+        RR.nom_fantasia,
+        RR.qtd_venda_hoje
+)
+SELECT *
+FROM DEMANDA
+ORDER BY 
+    cod_empresa,
+    cod_item;
