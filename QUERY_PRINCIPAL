@@ -1,4 +1,6 @@
 
+
+
 SELECT 
     pd.cod_empresa,
     fc.dta_fechamento,
@@ -261,7 +263,7 @@ SUM(quantidade) AS qtd_pend_desc
            ) AS tabela
            WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
            GROUP BY produto, empresa, hora')
-        AS dblink_result(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC, hora DATE)
+        AS dblink_result(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
 
         UNION ALL
 
@@ -309,7 +311,7 @@ SUM(quantidade) AS qtd_pend_desc
              ) AS tabela
              WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
              GROUP BY produto, empresa, hora'
-        ) AS blsm_data(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC,hora DATE)
+        ) AS blsm_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
 
         UNION ALL
 
@@ -357,7 +359,7 @@ SUM(quantidade) AS qtd_pend_desc
              ) AS tabela
              WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
              GROUP BY produto, empresa, hora'
-        ) AS atrm_data(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC, hora DATE)
+        ) AS atrm_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC )
 
         UNION ALL
 
@@ -405,7 +407,7 @@ SUM(quantidade) AS qtd_pend_desc
              ) AS tabela
              WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
              GROUP BY produto, empresa, hora'
-        ) AS gspr_data(cod_item INTEGER, cod_empresa INTEGER, qtd_pend_desc NUMERIC, hora DATE )
+        ) AS gspr_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC )
     ) AS combined_pendencias
 ) pendencias ON pendencias.cod_empresa = pd.cod_empresa AND pendencias.cod_item = rv.cod_item 
 
