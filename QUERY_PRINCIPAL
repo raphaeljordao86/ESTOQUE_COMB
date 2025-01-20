@@ -316,7 +316,7 @@ SUM(quantidade) AS qtd_pend_desc
         UNION ALL
 
         SELECT * FROM dblink(
-            'host=192.168.17.190 dbname=atrm user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+            'host=192.168.39.190 dbname=atnt user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
            'SELECT 
 produto AS cod_item, 
 empresa AS cod_empresa, 
@@ -359,7 +359,250 @@ SUM(quantidade) AS qtd_pend_desc
              ) AS tabela
              WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
              GROUP BY produto, empresa, hora'
-        ) AS atrm_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC )
+        ) AS atnt_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC )
+	  
+	  
+	  
+UNION ALL
+
+SELECT * FROM dblink(
+    'host=192.168.28.190 dbname=cvgl user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+    'SELECT 
+        produto AS cod_item, 
+        empresa AS cod_empresa, 
+        hora,
+        SUM(quantidade) AS qtd_pend_desc
+     FROM (
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora AS hora_abastecimento,
+             a.hora AS hora,
+             ''ABASTECIMENTO NA TELA'' AS local
+         FROM abastecimento a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         UNION
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora_abastec AS hora_abastecimento,
+             a.ts AS hora,
+             ''VENDA INICIADA'' AS local
+         FROM lancto_caixa a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN grupo_produto gp ON (p.grupo = gp.grid)
+         WHERE gp.codigo = ''1''
+     ) AS tabela
+     WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
+     GROUP BY produto, empresa, hora'
+) AS cvgl_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
+
+UNION ALL
+
+SELECT * FROM dblink(
+    'host=192.168.27.190 dbname=plib user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+    'SELECT 
+        produto AS cod_item, 
+        empresa AS cod_empresa, 
+        hora,
+        SUM(quantidade) AS qtd_pend_desc
+     FROM (
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora AS hora_abastecimento,
+             a.hora AS hora,
+             ''ABASTECIMENTO NA TELA'' AS local
+         FROM abastecimento a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         UNION
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora_abastec AS hora_abastecimento,
+             a.ts AS hora,
+             ''VENDA INICIADA'' AS local
+         FROM lancto_caixa a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN grupo_produto gp ON (p.grupo = gp.grid)
+         WHERE gp.codigo = ''1''
+     ) AS tabela
+     WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
+     GROUP BY produto, empresa, hora'
+) AS pqlb_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
+
+UNION ALL
+
+SELECT * FROM dblink(
+    'host=192.168.9.190 dbname=igua user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+    'SELECT 
+        produto AS cod_item, 
+        empresa AS cod_empresa, 
+        hora,
+        SUM(quantidade) AS qtd_pend_desc
+     FROM (
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora AS hora_abastecimento,
+             a.hora AS hora,
+             ''ABASTECIMENTO NA TELA'' AS local
+         FROM abastecimento a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         UNION
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora_abastec AS hora_abastecimento,
+             a.ts AS hora,
+             ''VENDA INICIADA'' AS local
+         FROM lancto_caixa a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN grupo_produto gp ON (p.grupo = gp.grid)
+         WHERE gp.codigo = ''1''
+     ) AS tabela
+     WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
+     GROUP BY produto, empresa, hora'
+) AS igua_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
+
+UNION ALL
+
+SELECT * FROM dblink(
+    'host=192.168.3.190 dbname=pltr user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+    'SELECT 
+        produto AS cod_item, 
+        empresa AS cod_empresa, 
+        hora,
+        SUM(quantidade) AS qtd_pend_desc
+     FROM (
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora AS hora_abastecimento,
+             a.hora AS hora,
+             ''ABASTECIMENTO NA TELA'' AS local
+         FROM abastecimento a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         UNION
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora_abastec AS hora_abastecimento,
+             a.ts AS hora,
+             ''VENDA INICIADA'' AS local
+         FROM lancto_caixa a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN grupo_produto gp ON (p.grupo = gp.grid)
+         WHERE gp.codigo = ''1''
+     ) AS tabela
+     WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
+     GROUP BY produto, empresa, hora'
+) AS pltr_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
+
+UNION ALL
+
+SELECT * FROM dblink(
+    'host=192.168.1.190 dbname=sjrp user=as.client password=d64$W!#%RK59cQ5Dr9jxDE79Bx',
+    'SELECT 
+        produto AS cod_item, 
+        empresa AS cod_empresa, 
+        hora,
+        SUM(quantidade) AS qtd_pend_desc
+     FROM (
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora AS hora_abastecimento,
+             a.hora AS hora,
+             ''ABASTECIMENTO NA TELA'' AS local
+         FROM abastecimento a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         UNION
+         SELECT 
+             b.nome AS bico,
+             e.codigo AS empresa,
+             p.codigo AS produto,
+             a.quantidade,
+             a.valor,
+             a.hora_abastec AS hora_abastecimento,
+             a.ts AS hora,
+             ''VENDA INICIADA'' AS local
+         FROM lancto_caixa a
+         JOIN bico_bomba bb ON (a.bico = bb.bomba)
+         JOIN bico as b on bb.bico=b.nome
+         JOIN deposito d ON (b.deposito = d.grid)
+         JOIN empresa AS e ON d.empresa = e.grid
+         JOIN produto p ON (d.produto = p.grid)
+         JOIN grupo_produto gp ON (p.grupo = gp.grid)
+         WHERE gp.codigo = ''1''
+     ) AS tabela
+     WHERE hora BETWEEN ''2024-12-01'' AND CURRENT_DATE
+     GROUP BY produto, empresa, hora'
+) AS sjrp_data(cod_item INTEGER, cod_empresa INTEGER, hora DATE, qtd_pend_desc NUMERIC)
+
 
         UNION ALL
 
@@ -435,7 +678,7 @@ LEFT JOIN (
              AND dn.dest_cnpj = dni.dest_cnpj_xml 
              AND dn.emit_cnpj = dni.emit_cnpj_xml
             WHERE dni.combustivel = 'S' 
-              AND dn.cod_empresa IN ('19', '29', '23', '52')
+              AND dn.cod_empresa IN (19,23,29,52,36,25,1,20,6)
               AND dn.aba IN ('REC') 
               AND dn.data_emi BETWEEN '2024-12-01' AND CURRENT_DATE
             GROUP BY dn.cod_empresa, dni.cprod,dn.data_emi
@@ -468,13 +711,15 @@ LEFT JOIN (
 ) resultado ON resultado.codigo::INTEGER = pd.cod_empresa AND resultado.data = fc.dta_fechamento -- Fazendo o join com cod_empresa
 	
 
-WHERE fc.dta_fechamento BETWEEN '2024-12-01' AND CURRENT_DATE
+WHERE fc.dta_fechamento BETWEEN '2024-09-01' AND CURRENT_DATE
   AND EXISTS (
       SELECT 1 
       FROM tab_almoxarifado al 
       WHERE al.cod_item_tanque = rv.cod_item
+	  
+
   )
-  AND pd.cod_empresa IN (19, 23, 29,52)
+  AND pd.cod_empresa IN (19,23,29,52,36,25,1,20,6,39,37,22)
   AND rv.cod_item <> 13111
 GROUP BY rv.cod_item, 
 pd.cod_empresa, 
