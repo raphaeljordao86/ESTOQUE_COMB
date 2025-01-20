@@ -34,7 +34,7 @@ WITH RESULTADO AS (
         JOIN tab_almoxarifado al ON al.cod_item_tanque = b.cod_item AND al.cod_empresa = g.cod_empresa
         JOIN tab_medicao_tanque mt ON mt.cod_almoxarifado = al.cod_almoxarifado AND mt.dta_medicao = CURRENT_DATE - INTERVAL '1 day'
     WHERE h.cod_grupo_item = 1
-        AND g.cod_empresa IN (19,23,29)
+        AND g.cod_empresa IN (19,23,29,52,36,25,1,20,6,39,37,22)
         AND e.dta_fechamento >= CURRENT_DATE - INTERVAL '14 days'
         AND e.dta_fechamento < CURRENT_DATE
         AND a.ind_cancelado = 'N'
@@ -110,8 +110,7 @@ DEMANDA AS (
         ) AS qtd_prevista_total
     FROM 
         RESULTADO RR
-    WHERE 
-        RR.semana IN (
+    WHERE RR.semana IN (
             EXTRACT(DOW FROM CURRENT_DATE)::INTEGER, 
             MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 1, 7), 
             MOD(EXTRACT(DOW FROM CURRENT_DATE)::INTEGER + 2, 7), 
@@ -126,9 +125,49 @@ DEMANDA AS (
         RR.cod_empresa,
         RR.nom_fantasia,
         RR.qtd_venda_hoje
+	
 )
-SELECT *
+SELECT CURRENT_DATE,nom_fantasia,des_item,
+tabela.ultima_medicao,
+     CASE 
+        WHEN DEMANDA.qtd_media_hoje > 0 THEN
+            FLOOR((tabela.ultima_medicao::NUMERIC - DEMANDA.qtd_media_hoje) 
+            / DEMANDA.qtd_media_hoje)::INTEGER || ' dia(s) e ' || 
+            FLOOR(((tabela.ultima_medicao::NUMERIC - DEMANDA.qtd_media_hoje) 
+            / DEMANDA.qtd_media_hoje) * 24 % 24)::INTEGER || ' hora(s)'
+        ELSE '0 dia(s) e 0 hora(s)' 
+    END AS dias_atendimento_saldo
 FROM DEMANDA
+join  (SELECT * FROM dblink(
+        'host=192.168.23.198 dbname=fuel_tank_db user=tank_admin password=UvBJOjRYf_Ev5Wg7N0-d4MX_ou6NeADj', 
+        $$
+       SELECT 
+       emsys AS cod_empresa, 
+       produto AS cod_item,
+       SUM(value) AS ultima_medicao
+         FROM (
+             SELECT DISTINCT ON (c.tank_id, c.post_id)
+ produto,
+    c.value,
+    p.emsys
+FROM collect AS c
+JOIN collect_type AS ct 
+    ON c.collect_type_id = ct.id
+JOIN post AS p 
+    ON c.post_id = p.id
+JOIN tank AS t 
+    on CAST(c.tank_id AS integer) = t.tank_id
+    AND p.emsys = t.post_id
+WHERE ct.id = 4
+ORDER BY c.post_id, c.tank_id, c.time DESC) AS tabela
+         GROUP BY emsys, produto
+        $$
+    ) AS dblink_result(cod_empresa INTEGER, cod_item INTEGER, ultima_medicao NUMERIC)) as tabela on DEMANDA.cod_empresa= tabela.cod_empresa and demanda.cod_item=tabela.cod_item
 ORDER BY 
-    cod_empresa,
-    cod_item;
+    demanda.cod_empresa,
+    demanda.cod_item
+	;
+	
+	
+
+	
