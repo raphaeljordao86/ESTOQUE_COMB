@@ -1,0 +1,71 @@
+WITH LatestWater AS (
+    SELECT
+        emsys AS cod_empresa,
+        produto AS cod_item,
+        ROUND(SUM(value)::numeric, 2) AS agua,  
+        tank_id,
+        post_id
+    FROM (
+        SELECT
+            DISTINCT ON (c.tank_id, c.post_id) produto,
+            c.value,
+            p.emsys,
+            c.tank_id,
+            c.post_id,
+            c.time
+        FROM
+            collect AS c
+            JOIN collect_type AS ct ON c.collect_type_id = ct.id
+            JOIN post AS p ON c.post_id = p.id
+            JOIN tank AS t ON CAST(c.tank_id AS integer) = t.tank_id
+            AND p.emsys = t.post_id
+        WHERE
+            ct.id = 13  
+            AND c.value > 0  
+            AND DATE(c.time) = CURRENT_DATE  
+        ORDER BY
+            c.post_id, c.tank_id, c.time DESC
+    ) AS tabela
+    GROUP BY emsys, produto, tank_id, post_id
+),
+LatestStock AS (
+
+    SELECT
+        emsys AS cod_empresa,
+        produto AS cod_item,
+        ROUND(SUM(value)::numeric) AS ultima_medicao,  
+        tank_id,
+        post_id
+    FROM (
+        SELECT
+            DISTINCT ON (c.tank_id, c.post_id) produto,
+            c.value,
+            p.emsys,
+            c.tank_id,
+            c.post_id,
+            c.time
+        FROM
+            collect AS c
+            JOIN collect_type AS ct ON c.collect_type_id = ct.id
+            JOIN post AS p ON c.post_id = p.id
+            JOIN tank AS t ON CAST(c.tank_id AS integer) = t.tank_id
+            AND p.emsys = t.post_id
+        WHERE
+            ct.id = 4 
+        ORDER BY
+            c.post_id, c.tank_id, c.time DESC
+    ) AS tabela
+    GROUP BY emsys, produto, tank_id, post_id
+)
+SELECT 
+    ls.cod_empresa,
+    ls.cod_item,
+    ls.tank_id AS num_tanque,  
+    ls.ultima_medicao AS total_tanque,
+    lw.agua AS quantidade_agua, 
+    ROUND((lw.agua::numeric / NULLIF(ls.ultima_medicao, 0)::numeric) * 100, 2) AS percentual_agua
+FROM LatestStock ls
+INNER JOIN LatestWater lw  
+    ON ls.post_id = lw.post_id 
+    AND ls.tank_id = lw.tank_id
+ORDER BY ls.cod_empresa, ls.tank_id;
