@@ -114,7 +114,7 @@ RESULTADO_FINAL AS (
 
 SELECT
     CURRENT_DATE AS data_consulta,
-    e.cod_empresa,  -- 🔹 Adicionado antes de nom_fantasia
+    e.cod_empresa,  
     e.nom_fantasia,
     r.cod_item,
     r.des_item,
