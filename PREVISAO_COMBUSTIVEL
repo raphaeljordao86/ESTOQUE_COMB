@@ -1,5 +1,5 @@
 WITH RESULTADO AS (
-    SELECT
+    SELECT DISTINCT
         b.cod_item,
         b.des_item,
         d.sgl_unidade,
@@ -25,11 +25,20 @@ WITH RESULTADO AS (
         b.cod_item, b.des_item, d.sgl_unidade, e.dta_fechamento, g.cod_empresa, g.nom_fantasia
 ),
 
-ESTOQUE_ATUAL AS (
+SOMA_LASTRO AS (
     SELECT
+        al.cod_empresa,
+        al.cod_item_tanque,
+        SUM(al.qtd_lastro_tanque) AS total_lastro_tanque
+    FROM tab_almoxarifado al
+    GROUP BY al.cod_empresa, al.cod_item_tanque
+),
+
+ESTOQUE_ATUAL AS (
+    SELECT DISTINCT
         dblink_result.cod_empresa,
         dblink_result.cod_item,
-        ROUND(dblink_result.ultima_medicao)::INTEGER AS saldo_atual,
+        ROUND(dblink_result.ultima_medicao)::INTEGER - COALESCE(sl.total_lastro_tanque, 0) AS saldo_atual,
         g.nom_fantasia
     FROM
         dblink(
@@ -59,48 +68,24 @@ ESTOQUE_ATUAL AS (
             $$
         ) AS dblink_result(cod_empresa INTEGER, cod_item INTEGER, ultima_medicao NUMERIC)
         JOIN tab_empresa g ON g.cod_empresa = dblink_result.cod_empresa
-),
-
-PERIODO_ANALISE AS (
-    SELECT
-        e.cod_empresa,
-        e.cod_item,
-        e.saldo_atual,
-        CEIL(e.saldo_atual / NULLIF(AVG(r.qtd), 0))::INTEGER AS dias_necessarios
-    FROM
-        ESTOQUE_ATUAL e
-        JOIN RESULTADO r ON e.cod_empresa = r.cod_empresa AND e.cod_item = r.cod_item
-    GROUP BY e.cod_empresa, e.cod_item, e.saldo_atual
-),
-
-PREVISAO_VENDAS AS (
-    SELECT
-        r.cod_empresa,
-        r.cod_item,
-        EXTRACT(DOW FROM CURRENT_DATE + i) AS dia_futuro,
-        AVG(r.qtd) FILTER (WHERE r.semana = EXTRACT(DOW FROM CURRENT_DATE + i)) AS consumo_previsto
-    FROM
-        RESULTADO r,
-        generate_series(0, (SELECT MAX(dias_necessarios) FROM PERIODO_ANALISE)) AS i
-    GROUP BY
-        r.cod_empresa, r.cod_item, EXTRACT(DOW FROM CURRENT_DATE + i)
+        LEFT JOIN SOMA_LASTRO sl ON sl.cod_empresa = dblink_result.cod_empresa AND sl.cod_item_tanque = dblink_result.cod_item
 ),
 
 PREVISAO_CONSUMO AS (
-    SELECT
+    SELECT DISTINCT
         e.cod_empresa,
         e.cod_item,
-        SUM(COALESCE(pv.consumo_previsto, 0)) / NULLIF((p.dias_necessarios * 24), 0) AS litros_por_hora
+        COALESCE(SUM(r.qtd), 0) / NULLIF((COUNT(DISTINCT r.dta_fechamento) * 24), 0) AS litros_por_hora
     FROM
         ESTOQUE_ATUAL e
-        JOIN PERIODO_ANALISE p ON e.cod_empresa = p.cod_empresa AND e.cod_item = p.cod_item
-        LEFT JOIN PREVISAO_VENDAS pv ON e.cod_empresa = pv.cod_empresa AND e.cod_item = pv.cod_item
-    GROUP BY e.cod_empresa, e.cod_item, p.dias_necessarios
+        JOIN RESULTADO r ON e.cod_empresa = r.cod_empresa AND e.cod_item = r.cod_item
+    GROUP BY e.cod_empresa, e.cod_item
 ),
 
 RESULTADO_FINAL AS (
-    SELECT
+    SELECT DISTINCT
         e.cod_empresa,
+        e.nom_fantasia,
         e.cod_item,
         b.des_item,
         e.saldo_atual,
@@ -108,22 +93,21 @@ RESULTADO_FINAL AS (
         (e.saldo_atual / NULLIF(p.litros_por_hora, 0)) AS horas_atendimento
     FROM
         ESTOQUE_ATUAL e
-        JOIN PREVISAO_CONSUMO p ON e.cod_empresa = p.cod_empresa AND e.cod_item = p.cod_item
+        LEFT JOIN PREVISAO_CONSUMO p ON e.cod_empresa = p.cod_empresa AND e.cod_item = p.cod_item
         JOIN tab_item b ON e.cod_item = b.cod_item
 )
 
-SELECT
+SELECT DISTINCT
     CURRENT_DATE AS data_consulta,
-    e.cod_empresa,  
-    e.nom_fantasia,
+    r.cod_empresa,  
+    r.nom_fantasia,
     r.cod_item,
     r.des_item,
-    e.saldo_atual,
+    r.saldo_atual,
     FLOOR(r.horas_atendimento / 24) || ' dias, ' ||
-    FLOOR(MOD(r.horas_atendimento, 24)) || ' horas e ' ||
-    ROUND((MOD(r.horas_atendimento, 1) * 60)) || ' minutos' AS previsao_detalhada_atendimento
+    FLOOR(MOD(r.horas_atendimento::NUMERIC, 24)) || ' horas e ' ||
+    ROUND((MOD(r.horas_atendimento::NUMERIC, 1) * 60)) || ' minutos' AS previsao_detalhada_atendimento
 FROM
     RESULTADO_FINAL r
-    JOIN ESTOQUE_ATUAL e ON r.cod_empresa = e.cod_empresa AND r.cod_item = e.cod_item
 ORDER BY
     r.cod_empresa, r.cod_item;
