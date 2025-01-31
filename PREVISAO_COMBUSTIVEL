@@ -114,8 +114,9 @@ RESULTADO_FINAL AS (
 
 SELECT
     CURRENT_DATE AS data_consulta,
+    e.cod_empresa,  -- 🔹 Adicionado antes de nom_fantasia
     e.nom_fantasia,
-    e.cod_item,
+    r.cod_item,
     r.des_item,
     e.saldo_atual,
     FLOOR(r.horas_atendimento / 24) || ' dias, ' ||
